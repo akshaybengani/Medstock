@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Medstock holds health information about real people, so none of it is
+  handed to cloud backup or to a device-to-device transfer. Everything stays
+  on the phone it was entered on.
+
+  Trade-off: there is no automatic restore on a new device. Flip
+  android:allowBackup to "true" and remove these exclusions if you would
+  rather have cloud restore than this level of privacy.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+    </device-transfer>
+</data-extraction-rules>
