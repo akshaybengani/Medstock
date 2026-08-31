@@ -491,6 +491,21 @@ void main() {
       expect(draftItems.single.lineCost, closeTo(25, 1e-9));
     });
   });
+
+
+  group('count labels read correctly', () {
+    test('one of a thing is singular', () {
+      // Mirrors BackupScreen._count, which is what the reassurance chips use.
+      String count(int n, String singular) =>
+          '$n ${n == 1 ? singular : '${singular}s'}';
+
+      expect(count(0, 'medicine'), '0 medicines');
+      expect(count(1, 'medicine'), '1 medicine');
+      expect(count(2, 'medicine'), '2 medicines');
+      expect(count(1, 'patient'), '1 patient');
+      expect(count(1, 'order'), '1 order');
+    });
+  });
 }
 
 /// Encodes a backup document the way the screen does.

@@ -143,6 +143,11 @@ class _BackupScreenState extends State<BackupScreen> {
     );
   }
 
+  /// "1 medicine" but "3 medicines" — a count is worth getting right when it
+  /// is the reassurance that a backup covers everything.
+  static String _count(int n, String singular) =>
+      '$n ${n == 1 ? singular : '${singular}s'}';
+
   Widget _line(BuildContext ctx, String label, int now, int incoming) {
     final theme = Theme.of(ctx);
     return Padding(
@@ -201,17 +206,17 @@ class _BackupScreenState extends State<BackupScreen> {
                   runSpacing: 8,
                   children: [
                     PillTag(
-                      label: '${provider.medicines.length} medicines',
+                      label: _count(provider.medicines.length, 'medicine'),
                       icon: Icons.medication_outlined,
                       dense: true,
                     ),
                     PillTag(
-                      label: '${provider.patients.length} patients',
+                      label: _count(provider.patients.length, 'patient'),
                       icon: Icons.people_outline,
                       dense: true,
                     ),
                     PillTag(
-                      label: '${provider.orders.length} orders',
+                      label: _count(provider.orders.length, 'order'),
                       icon: Icons.receipt_long_outlined,
                       dense: true,
                     ),
