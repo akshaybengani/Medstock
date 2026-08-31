@@ -169,7 +169,7 @@ void main() {
     // The additional-information card is below the fold of the lazy list.
     await tester.dragUntilVisible(
       find.text('Blood pressure'),
-      find.byType(ListView),
+      find.byType(Scrollable).first,
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();
@@ -193,7 +193,7 @@ void main() {
     // The additional-information section opens.
     await tester.dragUntilVisible(
       find.text('Additional information'),
-      find.byType(ListView),
+      find.byType(Scrollable).first,
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();
@@ -212,7 +212,7 @@ void main() {
 
     await tester.dragUntilVisible(
       find.byType(Switch).first,
-      find.byType(ListView),
+      find.byType(Scrollable).first,
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();
@@ -310,7 +310,7 @@ void main() {
       // Open every conditional branch of the form.
       await tester.dragUntilVisible(
         find.byType(Switch).first,
-        find.byType(ListView),
+        find.byType(Scrollable).first,
         const Offset(0, -200),
       );
       await tester.tap(find.byType(Switch).first);
@@ -328,7 +328,7 @@ void main() {
       await tester.pumpWidget(host(MedicineDetailScreen(medicineId: dytor.id!)));
       await tester.pumpAndSettle();
 
-      await tester.drag(find.byType(ListView), const Offset(0, -600));
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -449,7 +449,7 @@ void main() {
       // Attach a patient — the editor should land in duration mode.
       await tester.dragUntilVisible(
         find.byType(Switch).first,
-        find.byType(ListView),
+        find.byType(Scrollable).first,
         const Offset(0, -200),
       );
       await tester.tap(find.byType(Switch).first);
@@ -510,7 +510,7 @@ void main() {
       );
       await tester.dragUntilVisible(
         find.text('Additional information'),
-        find.byType(ListView),
+        find.byType(Scrollable).first,
         const Offset(0, -200),
       );
       await tester.tap(find.text('Additional information'));
@@ -541,7 +541,7 @@ void main() {
       // The pack size label gains its required marker.
       await tester.dragUntilVisible(
         find.text('CURRENT STOCK'),
-        find.byType(ListView),
+        find.byType(Scrollable).first,
         const Offset(0, 200),
       );
       await tester.pumpAndSettle();
@@ -572,7 +572,7 @@ void main() {
 
       await tester.dragUntilVisible(
         find.text('CURRENT STOCK'),
-        find.byType(ListView),
+        find.byType(Scrollable).first,
         const Offset(0, 200),
       );
       await tester.enterText(
@@ -584,7 +584,7 @@ void main() {
       // The form spells out what a pack price means per tablet.
       await tester.dragUntilVisible(
         find.textContaining('per tablet'),
-        find.byType(ListView),
+        find.byType(Scrollable).first,
         const Offset(0, -200),
       );
       await tester.pumpAndSettle();
@@ -600,6 +600,89 @@ void main() {
       // No price typed, so pack size stays optional and the form saves.
       expect(find.widgetWithText(TextFormField, 'Pack size'), findsOneWidget);
       expect(find.widgetWithText(TextFormField, 'Pack size *'), findsNothing);
+    });
+  });
+
+  group('pricing rule holds regardless of scroll position', () {
+    /// This is the case that slipped through on a real device: the form was a
+    /// lazy ListView, so scrolling down to the price field disposed the pack
+    /// size field, which unregistered it from the Form — and validate() then
+    /// silently skipped its validator, saving a priced medicine with no pack
+    /// size. The fix keeps every field mounted, plus an explicit guard in
+    /// _save() so the rule does not depend on layout at all.
+    testWidgets('saving with the pack size field scrolled away is refused',
+        (tester) async {
+      await tester.runAsync(seed);
+      final before = app.medicines.length;
+
+      // A short surface makes it certain that the two fields cannot both be
+      // visible at once.
+      tester.view.physicalSize = const Size(360 * 3, 560 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(host(const MedicineFormScreen()));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Medicine name'),
+        'Dytor',
+      );
+      await tester.pumpAndSettle();
+
+      // Reveal and fill the price, which lives well below the pack size.
+      await tester.dragUntilVisible(
+        find.text('Additional information'),
+        find.byType(Scrollable).first,
+        const Offset(0, -200),
+      );
+      await tester.tap(find.text('Additional information'));
+      await tester.pumpAndSettle();
+
+      await tester.dragUntilVisible(
+        find.widgetWithText(TextFormField, 'Price per strip / pack'),
+        find.byType(Scrollable).first,
+        const Offset(0, -200),
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Price per strip / pack'),
+        '25',
+      );
+      await tester.pumpAndSettle();
+
+      // Pack size is now off-screen. Save from here, without scrolling back.
+      await tester.tap(find.widgetWithText(FilledButton, 'Save medicine'));
+      await tester.pumpAndSettle();
+
+      // Nothing written, and the reason is stated.
+      expect(app.medicines.length, before);
+      expect(
+        find.textContaining('needed to work out the price per tablet'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the field stays registered while scrolled out of view',
+        (tester) async {
+      await tester.runAsync(seed);
+      tester.view.physicalSize = const Size(360 * 3, 560 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(host(const MedicineFormScreen()));
+      await tester.pumpAndSettle();
+
+      // Scroll to the very bottom of the form.
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
+      await tester.pumpAndSettle();
+
+      // The pack size field is still in the tree, so its validator still runs.
+      expect(
+        find.widgetWithText(TextFormField, 'Pack size', skipOffstage: false),
+        findsOneWidget,
+      );
     });
   });
 }

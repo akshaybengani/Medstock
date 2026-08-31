@@ -171,6 +171,19 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
   // ------------------------------------------------------------------- save
 
   Future<void> _save() async {
+    // Checked before Form.validate() and independently of it: "a price needs a
+    // pack size" is a data rule, and a rule that only holds while a particular
+    // widget happens to be on screen is not a rule at all.
+    if (_pricingEntered && Validators.parseInt(_packSize.text) < 1) {
+      setState(() => _showAdditional = true);
+      _formKey.currentState?.validate();
+      _toast(
+        'Add a pack size — it is needed to work out the price per '
+        '${_type.unitSingular}',
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       setState(() => _showAdditional = true);
       return;
@@ -340,9 +353,11 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
       ),
       body: Form(
         key: _formKey,
-        child: ListView(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             // ---------------------------------------------------- identity
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,7 +615,8 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
                 ],
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
