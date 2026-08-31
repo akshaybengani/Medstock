@@ -115,7 +115,7 @@ void main() {
     expect(find.textContaining('60 tablets in stock'), findsOneWidget);
 
     // Low stock floats to the top and is flagged.
-    expect(find.textContaining('need a refill'), findsOneWidget);
+    expect(find.textContaining('a refill'), findsOneWidget);
   });
 
   testWidgets('a patient tab shows only that patient\'s dose', (tester) async {
@@ -683,6 +683,74 @@ void main() {
         find.widgetWithText(TextFormField, 'Pack size', skipOffstage: false),
         findsOneWidget,
       );
+    });
+  });
+
+  group('validation feedback clears itself', () {
+    testWidgets('fixing the pack size clears its error without saving again',
+        (tester) async {
+      await tester.runAsync(seed);
+      await tester.pumpWidget(host(const MedicineFormScreen()));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Medicine name'),
+        'Dytor',
+      );
+      await tester.dragUntilVisible(
+        find.text('Additional information'),
+        find.byType(Scrollable).first,
+        const Offset(0, -200),
+      );
+      await tester.tap(find.text('Additional information'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Price per strip / pack'),
+        '25',
+      );
+      await tester.pumpAndSettle();
+
+      // Provoke the error. Match the field's own message exactly — the
+      // SnackBar carries similar wording and would otherwise satisfy this.
+      const inlineError = 'Needed to work out the price per tablet';
+      await tester.tap(find.widgetWithText(FilledButton, 'Save medicine'));
+      await tester.pump();
+      expect(find.text(inlineError), findsOneWidget);
+
+      // Typing a valid pack size clears it straight away.
+      await tester.dragUntilVisible(
+        find.widgetWithText(TextFormField, 'Pack size *'),
+        find.byType(Scrollable).first,
+        const Offset(0, 200),
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Pack size *'),
+        '10',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(inlineError), findsNothing);
+    });
+
+    testWidgets('the refill count agrees with its verb', (tester) async {
+      final mom = await tester.runAsync(() => app.addPatient('Mom'));
+      final now = DateTime.now();
+      await tester.runAsync(() => app.addMedicine(Medicine(
+            name: 'Nexito',
+            stockQty: 1,
+            stockAsOf: Dates.today(),
+            createdAt: now,
+            updatedAt: now,
+            assignments: [
+              DoseAssignment(patientId: mom!.id!, startDate: Dates.today()),
+            ],
+          )));
+
+      await tester.pumpWidget(host(const HomeShell()));
+      await tester.pumpAndSettle();
+
+      // Exactly one medicine, exactly one needing attention.
+      expect(find.text('1 of 1 medicine needs a refill'), findsOneWidget);
     });
   });
 }

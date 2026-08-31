@@ -246,8 +246,11 @@ class _SummaryStrip extends StatelessWidget {
           Expanded(
             child: Text(
               attention > 0
-                  ? '$attention of $total ${total == 1 ? 'medicine' : 'medicines'} need a refill'
-                  : 'All $total ${total == 1 ? 'medicine' : 'medicines'} well stocked',
+                  ? '$attention of $total '
+                      '${total == 1 ? 'medicine' : 'medicines'} '
+                      '${attention == 1 ? 'needs' : 'need'} a refill'
+                  : 'All $total ${total == 1 ? 'medicine' : 'medicines'} '
+                      'well stocked',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
                 fontWeight: FontWeight.w500,

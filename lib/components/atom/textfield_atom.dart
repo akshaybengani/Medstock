@@ -19,6 +19,7 @@ class AppTextField extends StatelessWidget {
     this.autofocus = false,
     this.onChanged,
     this.helperText,
+    this.autovalidateMode = AutovalidateMode.onUserInteraction,
   });
 
   final TextEditingController controller;
@@ -36,11 +37,16 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final String? helperText;
 
+  /// Revalidates as the user types once they have interacted, so a corrected
+  /// field clears its error immediately instead of waiting for the next save.
+  final AutovalidateMode autovalidateMode;
+
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
       validator: validator,
+      autovalidateMode: autovalidateMode,
       maxLines: maxLines,
       autofocus: autofocus,
       onChanged: onChanged,
