@@ -345,7 +345,8 @@ class AppProvider extends ChangeNotifier {
       );
     }
 
-    if (before.unitPrice != after.unitPrice) {
+    if (before.packPrice != after.packPrice ||
+        (before.packSize != after.packSize && after.packPrice != null)) {
       await _eventRepo.record(
         id,
         MedicineEventType.priceChanged,
@@ -380,11 +381,21 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// "Price: not set → ₹25 per strip of 10 (₹2.50 per tablet)".
   String _describePriceChange(Medicine before, Medicine after) {
-    String money(double? v) => v == null ? 'not set' : '₹${Dates.qty(v)}';
-    final unit = after.type.unitSingular;
-    return 'Price per $unit: ${money(before.unitPrice)} → '
-        '${money(after.unitPrice)}';
+    String pack(Medicine m) {
+      final price = m.packPrice;
+      if (price == null) return 'not set';
+      final size = m.packSize;
+      if (size < 1) return Dates.money(price);
+      return '${Dates.money(price)} per pack of $size';
+    }
+
+    final perUnit = after.unitPrice;
+    final tail = perUnit == null
+        ? ''
+        : ' (${Dates.money(perUnit)} per ${after.type.unitSingular})';
+    return 'Price: ${pack(before)} → ${pack(after)}$tail';
   }
 
   /// A stable string for comparing dosage sets between two versions.

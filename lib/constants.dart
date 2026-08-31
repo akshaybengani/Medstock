@@ -6,7 +6,7 @@ class K {
 
   static const String appName = 'Medstock';
   static const String dbName = 'medstock.db';
-  static const int dbVersion = 2;
+  static const int dbVersion = 3;
 
   /// Hour of day (24h) used for refill reminder notifications.
   static const int reminderHour = 9;

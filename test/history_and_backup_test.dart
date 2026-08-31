@@ -27,10 +27,13 @@ void main() {
     await app.load();
   });
 
+  /// [packPrice] is the cost of one pack of [packSize] units, which is how
+  /// medicines are actually bought.
   Medicine draft({
     required String name,
     double stock = 0,
-    double? price,
+    double? packPrice,
+    int packSize = 0,
     MedicineType type = MedicineType.tablet,
     List<DoseAssignment> assignments = const [],
   }) {
@@ -40,7 +43,8 @@ void main() {
       type: type,
       stockQty: stock,
       stockAsOf: Dates.today(),
-      unitPrice: price,
+      packPrice: packPrice,
+      packSize: packSize,
       createdAt: now,
       updatedAt: now,
       assignments: assignments,
@@ -95,15 +99,17 @@ void main() {
     });
 
     test('a price change is recorded with both values', () async {
-      final created =
-          await app.addMedicine(draft(name: 'Dytor', stock: 10, price: 2));
+      final created = await app.addMedicine(
+        draft(name: 'Dytor', stock: 10, packPrice: 20, packSize: 10),
+      );
 
       await app.updateMedicine(Medicine(
         id: created.id,
         name: 'Dytor',
         stockQty: 10,
         stockAsOf: Dates.today(),
-        unitPrice: 2.5,
+        packPrice: 25,
+        packSize: 10,
         createdAt: created.createdAt,
         updatedAt: DateTime.now(),
       ));
@@ -111,8 +117,10 @@ void main() {
       final events = await app.eventsFor(created.id!);
       final priced =
           events.firstWhere((e) => e.type == MedicineEventType.priceChanged);
-      expect(priced.note, contains('₹2'));
-      expect(priced.note, contains('₹2.5'));
+      expect(priced.note, contains('₹20 per pack of 10'));
+      expect(priced.note, contains('₹25 per pack of 10'));
+      // And it spells out what that means per tablet.
+      expect(priced.note, contains('₹2.50 per tablet'));
     });
 
     test('receiving an order records against each medicine', () async {
@@ -162,10 +170,11 @@ void main() {
   group('order cost estimate', () {
     test('estimates from the price snapshot, exact quantity', () async {
       final mom = await app.addPatient('Mom');
-      // ₹2.50 a tablet, 1 a day, nothing in stock.
+      // ₹25 for a strip of 10 => ₹2.50 a tablet, 1 a day, nothing in stock.
       await app.addMedicine(draft(
         name: 'Dytor',
-        price: 2.5,
+        packPrice: 25,
+        packSize: 10,
         assignments: [
           DoseAssignment(patientId: mom.id!, startDate: Dates.today()),
         ],
@@ -202,7 +211,8 @@ void main() {
       final mom = await app.addPatient('Mom');
       final created = await app.addMedicine(draft(
         name: 'Dytor',
-        price: 2,
+        packPrice: 20,
+        packSize: 10,
         assignments: [
           DoseAssignment(patientId: mom.id!, startDate: Dates.today()),
         ],
@@ -221,7 +231,8 @@ void main() {
         name: 'Dytor',
         stockQty: 0,
         stockAsOf: Dates.today(),
-        unitPrice: 99,
+        packPrice: 990,
+        packSize: 10,
         createdAt: created.createdAt,
         updatedAt: DateTime.now(),
         assignments: created.assignments,
@@ -263,7 +274,8 @@ void main() {
       final med = await app.addMedicine(draft(
         name: 'Dytor',
         stock: 60,
-        price: 2.5,
+        packPrice: 25,
+        packSize: 10,
         assignments: [
           DoseAssignment(patientId: mom.id!, startDate: Dates.today()),
           DoseAssignment(
@@ -425,6 +437,58 @@ void main() {
       await app.restoreBackup(preview);
 
       expect(app.medicines.single.name, 'Dytor');
+    });
+  });
+
+  group('pack pricing', () {
+    test('per-unit cost is derived from the pack', () {
+      final m = draft(name: 'Dytor', packPrice: 25, packSize: 10);
+      expect(m.packPrice, 25);
+      expect(m.unitPrice, closeTo(2.5, 1e-9));
+      expect(m.hasIncompletePricing, isFalse);
+    });
+
+    test('a pack of one means the pack price is the unit price', () {
+      final m = draft(
+        name: 'Refresh Tears',
+        type: MedicineType.drops,
+        packPrice: 120,
+        packSize: 1,
+      );
+      expect(m.unitPrice, 120);
+    });
+
+    test('a price without a pack size yields no estimate, never a guess', () {
+      final m = draft(name: 'Dytor', packPrice: 25);
+      expect(m.unitPrice, isNull);
+      expect(m.hasIncompletePricing, isTrue);
+    });
+
+    test('no price means no unit price', () {
+      final m = draft(name: 'Dytor', packSize: 10);
+      expect(m.unitPrice, isNull);
+      expect(m.hasIncompletePricing, isFalse);
+    });
+
+    test('an order costs the exact count, not whole packs', () async {
+      final mom = await app.addPatient('Mom');
+      // ₹25 a strip of 10; 1 a day for 7 days needs 7 tablets, not a whole
+      // strip, because the pharmacy cuts the strip.
+      await app.addMedicine(draft(
+        name: 'Dytor',
+        packPrice: 25,
+        assignments: [
+          DoseAssignment(patientId: mom.id!, startDate: Dates.today()),
+        ],
+        packSize: 10,
+      ));
+
+      final target = Dates.today().add(const Duration(days: 6));
+      final draftItems = app.buildDraft(target);
+      // Quantity still rounds up to a whole pack when ordering...
+      expect(draftItems.single.qty, 10);
+      // ...and 10 tablets at ₹2.50 is ₹25.
+      expect(draftItems.single.lineCost, closeTo(25, 1e-9));
     });
   });
 }

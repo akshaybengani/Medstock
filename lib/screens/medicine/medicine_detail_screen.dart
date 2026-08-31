@@ -473,11 +473,17 @@ class _DetailsCard extends StatelessWidget {
           'Expires',
           Dates.pretty(medicine.expiryDate!)
         ),
-      if (medicine.unitPrice != null)
+      if (medicine.packPrice != null)
         (
           Icons.currency_rupee,
-          'Price per ${_singular(medicine.unitLabel)}',
-          Dates.qty(medicine.unitPrice!)
+          medicine.packSize > 1
+              ? 'Price per pack of ${medicine.packSize}'
+              : 'Price per ${_singular(medicine.unitLabel)}',
+          medicine.unitPrice == null
+              ? Dates.money(medicine.packPrice!)
+              : '${Dates.money(medicine.packPrice!)}  ·  '
+                  '${Dates.money(medicine.unitPrice!)} per '
+                  '${_singular(medicine.unitLabel)}',
         ),
       if (_has(medicine.notes))
         (Icons.sticky_note_2_outlined, 'Notes', medicine.notes!),

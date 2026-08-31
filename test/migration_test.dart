@@ -210,6 +210,86 @@ void main() {
     DatabaseService.pathOverride = await seedV1Database();
     await DatabaseService.instance.database; // would throw if one were missing
   });
+
+  /// A v2 database: the history table exists and price is still per unit.
+  Future<String> seedV2Database({
+    double? unitPrice,
+    int packSize = 0,
+  }) async {
+    // Build v1 first, then apply the shipped v2 step, so this fixture cannot
+    // drift from the real migration path.
+    final path = await seedV1Database();
+    final db = await databaseFactory.openDatabase(
+      path,
+      options: OpenDatabaseOptions(version: 1),
+    );
+    await db.execute('''
+      CREATE TABLE medicine_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, medicine_id INTEGER NOT NULL,
+        type TEXT NOT NULL, at TEXT NOT NULL, qty_delta REAL,
+        qty_before REAL, qty_after REAL, note TEXT)
+    ''');
+    await db.execute('ALTER TABLE order_items ADD COLUMN unit_price REAL');
+    await db.update('medicines', {
+      'unit_price': unitPrice,
+      'pack_size': packSize,
+    });
+    await db.setVersion(2);
+    await db.close();
+    return path;
+  }
+
+  group('v2 -> v3: price moves from per unit to per pack', () {
+    test('a priced medicine keeps the same cost per unit', () async {
+      // ₹2.50 a tablet in a strip of 10 becomes ₹25 a strip.
+      DatabaseService.pathOverride =
+          await seedV2Database(unitPrice: 2.5, packSize: 10);
+      final db = await DatabaseService.instance.database;
+
+      expect(await db.getVersion(), K.dbVersion);
+      final row = (await db.query('medicines')).single;
+      expect(row['pack_price'], closeTo(25, 1e-9));
+      expect(row['pack_size'], 10);
+      // The derived per-unit cost is unchanged, which is the whole point.
+      expect((row['pack_price'] as num) / (row['pack_size'] as num),
+          closeTo(2.5, 1e-9));
+    });
+
+    test('a price with no pack size becomes a pack of one', () async {
+      DatabaseService.pathOverride =
+          await seedV2Database(unitPrice: 7, packSize: 0);
+      final db = await DatabaseService.instance.database;
+
+      final row = (await db.query('medicines')).single;
+      expect(row['pack_price'], closeTo(7, 1e-9));
+      expect(row['pack_size'], 1);
+    });
+
+    test('an unpriced medicine stays unpriced', () async {
+      DatabaseService.pathOverride =
+          await seedV2Database(unitPrice: null, packSize: 10);
+      final db = await DatabaseService.instance.database;
+
+      final row = (await db.query('medicines')).single;
+      expect(row['pack_price'], isNull);
+      expect(row['pack_size'], 10);
+    });
+
+    test('rows survive the whole v1 -> v3 chain', () async {
+      DatabaseService.pathOverride = await seedV1Database();
+      final db = await DatabaseService.instance.database;
+
+      expect(await db.getVersion(), K.dbVersion);
+      expect((await db.query('medicines')).single['name'], 'Dytor');
+      expect((await db.query('patients')).single['name'], 'Mom');
+      expect((await db.query('order_items')).single['qty'], 30.0);
+
+      final cols = (await db.rawQuery('PRAGMA table_info(medicines)'))
+          .map((c) => c['name'] as String)
+          .toSet();
+      expect(cols, contains('pack_price'));
+    });
+  });
 }
 
 /// Table and column names, so two databases can be compared structurally.

@@ -496,4 +496,110 @@ void main() {
       expect(find.textContaining('0.03'), findsNothing);
     });
   });
+
+  group('pack pricing validation', () {
+    /// Opens the form and reveals the price field, which lives in the
+    /// collapsible "Additional information" block.
+    Future<void> openPricing(WidgetTester tester) async {
+      await tester.pumpWidget(host(const MedicineFormScreen()));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Medicine name'),
+        'Dytor',
+      );
+      await tester.dragUntilVisible(
+        find.text('Additional information'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.tap(find.text('Additional information'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the price field asks for a pack price, not a unit price',
+        (tester) async {
+      await tester.runAsync(seed);
+      await openPricing(tester);
+
+      expect(find.widgetWithText(TextFormField, 'Price per strip / pack'),
+          findsOneWidget);
+      expect(find.textContaining('Price per tablet'), findsNothing);
+    });
+
+    testWidgets('entering a price makes pack size mandatory', (tester) async {
+      await tester.runAsync(seed);
+      final before = app.medicines.length;
+      await openPricing(tester);
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Price per strip / pack'),
+        '25',
+      );
+      await tester.pumpAndSettle();
+
+      // The pack size label gains its required marker.
+      await tester.dragUntilVisible(
+        find.text('CURRENT STOCK'),
+        find.byType(ListView),
+        const Offset(0, 200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextFormField, 'Pack size *'), findsOneWidget);
+
+      // Saving is refused with an explanation rather than silently costing
+      // nothing.
+      await tester.tap(find.widgetWithText(FilledButton, 'Save medicine'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Needed to work out the price per tablet'),
+        findsOneWidget,
+      );
+      // Nothing was written.
+      expect(app.medicines.length, before);
+    });
+
+    testWidgets('with a pack size it saves and shows the per-unit cost',
+        (tester) async {
+      await tester.runAsync(seed);
+      await openPricing(tester);
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Price per strip / pack'),
+        '25',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.dragUntilVisible(
+        find.text('CURRENT STOCK'),
+        find.byType(ListView),
+        const Offset(0, 200),
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Pack size *'),
+        '10',
+      );
+      await tester.pumpAndSettle();
+
+      // The form spells out what a pack price means per tablet.
+      await tester.dragUntilVisible(
+        find.textContaining('per tablet'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('₹2.50 per tablet'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a price alone is still allowed when left blank',
+        (tester) async {
+      await tester.runAsync(seed);
+      await openPricing(tester);
+
+      // No price typed, so pack size stays optional and the form saves.
+      expect(find.widgetWithText(TextFormField, 'Pack size'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'Pack size *'), findsNothing);
+    });
+  });
 }

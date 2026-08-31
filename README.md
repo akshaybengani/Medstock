@@ -116,10 +116,17 @@ Sharing uses a `wa.me/<number>?text=…` link. A saved pharmacy contact opens th
 chat directly; without one, WhatsApp shows its own contact picker.
 **Mark received** adds the ordered quantities back into stock, closing the loop.
 
-Where a per-unit price is recorded, orders also show an **estimated total**
-(exact quantity × unit price — pharmacies here cut strips to the count). Lines
-without a price are excluded from the estimate rather than guessed at, and the
-count of those is shown so the number is never quietly wrong.
+Where a price is recorded, orders also show an **estimated total**. Price is
+asked for **per pack** — a strip, a bottle, a box — because that is how
+medicines are bought; the per-unit cost is then `packPrice ÷ packSize`. Setting
+a price therefore *requires* a pack size, which the form enforces rather than
+silently costing nothing.
+
+Estimates use the exact quantity rather than whole packs, since pharmacies here
+cut a strip to the count asked for. Lines with no price are excluded rather than
+guessed at, and the number of those is shown so the total is never quietly
+wrong. The per-unit price is snapshotted onto the order line, so repricing a
+medicine never rewrites the cost of an order already placed.
 
 ## Medicine history
 
@@ -173,7 +180,9 @@ App updates must never cost you your data, so the schema is versioned with real
 migration steps ([`lib/services/database_service.dart`](lib/services/database_service.dart)):
 
 - Every version between the installed one and the current one is applied in
-  order, so skipping several releases still lands correctly.
+  order, so skipping several releases still lands correctly. `v3` moved price
+  from per-unit to per-pack and converted existing rows so no recorded cost
+  changed.
 - Steps only ever **add** tables or columns.
 - A fresh install replays the same migrations on top of v1, so `onCreate` and
   `onUpgrade` can never drift apart — [there is a test asserting the two produce
@@ -284,7 +293,7 @@ app already published under that key.
 
 ```
 flutter analyze   # clean
-flutter test      # 100 tests
+flutter test      # 123 tests
 ```
 
 - **Projection engine** — snapshot replay, coverage, order quantities,

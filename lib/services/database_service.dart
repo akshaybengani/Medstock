@@ -44,6 +44,7 @@ class DatabaseService {
   /// that has shipped — add a new one.
   static final Map<int, Future<void> Function(Database)> _migrations = {
     2: _migrateTo2,
+    3: _migrateTo3,
   };
 
   /// v1 -> v2: the medicine history log, and a price snapshot on order lines.
@@ -187,6 +188,43 @@ class DatabaseService {
     for (var v = 2; v <= version; v++) {
       await _migrations[v]!(db);
     }
+  }
+
+  /// v2 -> v3: price is recorded per pack (a strip, a bottle, a box) rather
+  /// than per single unit, because that is how medicines are actually bought.
+  ///
+  /// Existing prices are converted so the cost per unit is unchanged:
+  ///   pack_price = unit_price * pack_size   (when a pack size was recorded)
+  ///   pack_price = unit_price, pack_size = 1 (when it was not)
+  /// The old `unit_price` column is left in place — dropping a column is not
+  /// supported by every SQLite build Android ships — but is no longer read.
+  static Future<void> _migrateTo3(Database db) async {
+    final columns = await db.rawQuery('PRAGMA table_info(medicines)');
+    final names = columns.map((c) => c['name'] as String).toSet();
+
+    if (!names.contains('pack_price')) {
+      await db.execute('ALTER TABLE medicines ADD COLUMN pack_price REAL');
+    }
+
+    if (!names.contains('unit_price')) return;
+
+    // A pack of one keeps the arithmetic identical for rows that never had a
+    // pack size, so no historical estimate shifts.
+    await db.execute('''
+      UPDATE medicines
+         SET pack_price = unit_price * pack_size
+       WHERE unit_price IS NOT NULL
+         AND pack_size >= 1
+         AND pack_price IS NULL
+    ''');
+    await db.execute('''
+      UPDATE medicines
+         SET pack_price = unit_price,
+             pack_size  = 1
+       WHERE unit_price IS NOT NULL
+         AND (pack_size IS NULL OR pack_size < 1)
+         AND pack_price IS NULL
+    ''');
   }
 
   /// Applies every migration step between the installed and target version.

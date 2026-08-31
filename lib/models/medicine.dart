@@ -38,7 +38,11 @@ class Medicine {
   final String? manufacturer;
   final String? storage;
   final DateTime? expiryDate;
-  final double? unitPrice;
+
+  /// What one pack costs — a strip, a bottle, a box. Medicines are bought by
+  /// the pack, so this is what the user is asked for. Requires [packSize] to
+  /// be set, which the form enforces.
+  final double? packPrice;
 
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -63,7 +67,7 @@ class Medicine {
     this.manufacturer,
     this.storage,
     this.expiryDate,
-    this.unitPrice,
+    this.packPrice,
     required this.createdAt,
     required this.updatedAt,
     this.assignments = const [],
@@ -86,7 +90,7 @@ class Medicine {
     String? manufacturer,
     String? storage,
     DateTime? expiryDate,
-    double? unitPrice,
+    double? packPrice,
     DateTime? updatedAt,
     List<DoseAssignment>? assignments,
     bool clearImage = false,
@@ -109,7 +113,7 @@ class Medicine {
         manufacturer: manufacturer ?? this.manufacturer,
         storage: storage ?? this.storage,
         expiryDate: clearExpiry ? null : (expiryDate ?? this.expiryDate),
-        unitPrice: unitPrice ?? this.unitPrice,
+        packPrice: packPrice ?? this.packPrice,
         createdAt: createdAt,
         updatedAt: updatedAt ?? DateTime.now(),
         assignments: assignments ?? this.assignments,
@@ -122,6 +126,21 @@ class Medicine {
           : '$name ${strength!.trim()}';
 
   String get unitLabel => type.unitPlural;
+
+  /// Cost of a single unit, derived from the pack price.
+  ///
+  /// Pharmacies here cut a strip to the exact count asked for, so an order is
+  /// costed per unit rather than per whole pack. Null when either the price or
+  /// the pack size is missing — an estimate is never guessed at.
+  double? get unitPrice {
+    final price = packPrice;
+    if (price == null || packSize < 1) return null;
+    return price / packSize;
+  }
+
+  /// True when a price has been recorded but the pack size it depends on has
+  /// not, which the form refuses to save.
+  bool get hasIncompletePricing => packPrice != null && packSize < 1;
 
   /// Every field a search query should be matched against.
   String get searchBlob => [
@@ -152,7 +171,7 @@ class Medicine {
         'manufacturer': manufacturer,
         'storage': storage,
         'expiry_date': expiryDate == null ? null : Dates.toIso(expiryDate!),
-        'unit_price': unitPrice,
+        'pack_price': packPrice,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
       };
@@ -179,7 +198,10 @@ class Medicine {
         manufacturer: m['manufacturer'] as String?,
         storage: m['storage'] as String?,
         expiryDate: Dates.fromIso(m['expiry_date'] as String?),
-        unitPrice: (m['unit_price'] as num?)?.toDouble(),
+        // `unit_price` is the pre-v3 column, kept only as a read fallback for
+        // any row the migration could not reach.
+        packPrice: (m['pack_price'] as num?)?.toDouble() ??
+            (m['unit_price'] as num?)?.toDouble(),
         createdAt:
             DateTime.tryParse((m['created_at'] as String?) ?? '') ??
                 DateTime.now(),

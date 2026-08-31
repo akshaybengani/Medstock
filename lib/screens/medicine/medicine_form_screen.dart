@@ -45,7 +45,7 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
   late final TextEditingController _prescribedBy;
   late final TextEditingController _manufacturer;
   late final TextEditingController _storage;
-  late final TextEditingController _unitPrice;
+  late final TextEditingController _packPrice;
 
   late MedicineType _type;
   DateTime? _expiryDate;
@@ -83,8 +83,8 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
     _prescribedBy = TextEditingController(text: m?.prescribedBy ?? '');
     _manufacturer = TextEditingController(text: m?.manufacturer ?? '');
     _storage = TextEditingController(text: m?.storage ?? '');
-    _unitPrice = TextEditingController(
-      text: m?.unitPrice == null ? '' : Dates.qty(m!.unitPrice!),
+    _packPrice = TextEditingController(
+      text: m?.packPrice == null ? '' : Dates.qty(m!.packPrice!),
     );
 
     _type = m?.type ?? MedicineType.tablet;
@@ -110,7 +110,7 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
       _prescribedBy,
       _manufacturer,
       _storage,
-      _unitPrice,
+      _packPrice,
     ]) {
       c.dispose();
     }
@@ -185,9 +185,9 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
     final enteredLowStock = Validators.parseInt(_lowStockDays.text);
     final lowStockDays =
         enteredLowStock == 0 ? K.defaultLowStockDays : enteredLowStock;
-    final unitPrice = _unitPrice.text.trim().isEmpty
+    final packPrice = _packPrice.text.trim().isEmpty
         ? null
-        : Validators.parseQty(_unitPrice.text);
+        : Validators.parseQty(_packPrice.text);
 
     String? trimmed(TextEditingController c) {
       final v = c.text.trim();
@@ -219,7 +219,7 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
           manufacturer: trimmed(_manufacturer),
           storage: trimmed(_storage),
           expiryDate: _expiryDate,
-          unitPrice: unitPrice,
+          packPrice: packPrice,
           createdAt: base.createdAt,
           updatedAt: DateTime.now(),
           assignments: assignments,
@@ -242,7 +242,7 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
           manufacturer: trimmed(_manufacturer),
           storage: trimmed(_storage),
           expiryDate: _expiryDate,
-          unitPrice: unitPrice,
+          packPrice: packPrice,
           createdAt: now,
           updatedAt: now,
           assignments: assignments,
@@ -267,6 +267,36 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
       _toast('Could not save this medicine');
       debugPrint('Medstock: save failed — $e');
     }
+  }
+
+  /// True when the user has typed a price, which is what makes pack size
+  /// required rather than optional.
+  bool get _pricingEntered => _packPrice.text.trim().isNotEmpty;
+
+  String? _validatePackSize(String? value) {
+    final base = Validators.optionalInt(value, field: 'Pack size');
+    if (base != null) return base;
+
+    if (!_pricingEntered) return null;
+
+    final size = Validators.parseInt(value);
+    if (size < 1) {
+      return 'Needed to work out the price per '
+          '${_type.unitSingular}';
+    }
+    return null;
+  }
+
+  /// Shows what one unit works out to, so "price per pack" is unambiguous.
+  String? _perUnitHint() {
+    if (!_pricingEntered) return 'used for order estimates';
+
+    final price = Validators.parseQty(_packPrice.text);
+    final size = Validators.parseInt(_packSize.text);
+    if (price <= 0) return 'used for order estimates';
+    if (size < 1) return 'set a pack size too';
+
+    return '≈ ${Dates.money(price / size)} per ${_type.unitSingular}';
   }
 
   void _toast(String message) {
@@ -399,13 +429,15 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
                 Expanded(
                   child: AppTextField(
                     controller: _packSize,
-                    label: 'Pack size',
+                    label: _pricingEntered ? 'Pack size *' : 'Pack size',
                     hint: 'e.g. 10',
                     numericOnly: true,
                     prefixIcon: Icons.widgets_outlined,
-                    helperText: 'per strip / box',
-                    validator: (v) =>
-                        Validators.optionalInt(v, field: 'Pack size'),
+                    helperText: _pricingEntered
+                        ? '${_type.unitPlural} per pack'
+                        : 'per strip / box',
+                    onChanged: (_) => setState(() {}),
+                    validator: _validatePackSize,
                   ),
                 ),
               ],
@@ -515,12 +547,15 @@ class _MedicineFormScreenState extends State<MedicineFormScreen> {
                     children: [
                       Expanded(
                         child: AppTextField(
-                          controller: _unitPrice,
-                          label: 'Price per ${_type.unitSingular}',
+                          controller: _packPrice,
+                          label: _type.isContinuousUse
+                              ? 'Price per ${_type.unitSingular}'
+                              : 'Price per strip / pack',
                           numericOnly: true,
                           decimal: true,
                           prefixIcon: Icons.currency_rupee,
-                          helperText: 'used for order estimates',
+                          helperText: _perUnitHint(),
+                          onChanged: (_) => setState(() {}),
                           validator: (v) =>
                               Validators.optionalNumber(v, field: 'Price'),
                         ),
