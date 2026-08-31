@@ -11,35 +11,52 @@ import '../../services/settings_service.dart';
 /// explainer waits until the user has actually added a medicine, at which
 /// point the feature has obvious value.
 class NotificationRationaleDialog extends StatelessWidget {
-  const NotificationRationaleDialog({super.key});
+  const NotificationRationaleDialog({super.key, this.offerSettings = false});
 
-  /// Shows the explainer if it is still worth asking, and returns whether
-  /// permission ended up granted.
+  /// True once Android has stopped showing its own permission prompt, so the
+  /// only route left is the system settings screen.
+  final bool offerSettings;
+
+  /// Shows the explainer, and returns whether permission ended up granted.
   ///
-  /// Skipped when permission is already granted, when the OS will no longer
-  /// show its prompt, or when the user has said "not now".
+  /// Called after each medicine is saved and keeps appearing until permission
+  /// is actually granted — saying "not now" declines this time, not forever.
+  ///
+  /// One wrinkle: Android stops showing its own prompt after a couple of
+  /// refusals. Once we detect that asking no longer produces a decision, the
+  /// dialog switches to offering the app's notification settings instead, so
+  /// "Allow reminders" can never become a button that does nothing.
   static Future<bool> maybeAsk(BuildContext context) async {
     final notifications = NotificationService.instance;
 
     if (await notifications.areNotificationsEnabled()) return true;
-    if (await SettingsService.instance.readNotificationPromptDismissed()) {
-      return false;
-    }
+    if (!context.mounted) return false;
+
+    final systemPromptSpent =
+        await SettingsService.instance.readSystemPromptSpent();
     if (!context.mounted) return false;
 
     final proceed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const NotificationRationaleDialog(),
+      builder: (_) =>
+          NotificationRationaleDialog(offerSettings: systemPromptSpent),
     );
 
-    if (proceed != true) {
-      await SettingsService.instance.writeNotificationPromptDismissed(true);
-      return false;
+    // "Not now" only declines this time; the next medicine asks again.
+    if (proceed != true) return false;
+
+    if (systemPromptSpent) {
+      await notifications.openSettings();
+      return notifications.areNotificationsEnabled();
     }
 
-    // Now hand over to the system prompt, which the user is expecting.
-    return notifications.requestPermission();
+    final granted = await notifications.requestPermission();
+    if (!granted) {
+      // The system prompt has now been used up; next time offer settings.
+      await SettingsService.instance.writeSystemPromptSpent(true);
+    }
+    return granted;
   }
 
   @override
@@ -61,15 +78,24 @@ class NotificationRationaleDialog extends StatelessWidget {
           color: scheme.onPrimaryContainer,
         ),
       ),
-      title: const Text('Get told before you run out'),
+      title: Text(
+        offerSettings
+            ? 'Reminders are switched off'
+            : 'Get told before you run out',
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Medstock can work out the exact day each medicine runs out and '
-            'remind you ${K.defaultLowStockDays} days beforehand, at '
-            '${K.reminderHour} a.m.',
+            offerSettings
+                ? 'Android will not ask again, so reminders have to be turned '
+                    'on in system settings. Medstock can then work out the '
+                    'exact day each medicine runs out and warn you '
+                    '${K.defaultLowStockDays} days beforehand.'
+                : 'Medstock can work out the exact day each medicine runs out '
+                    'and remind you ${K.defaultLowStockDays} days beforehand, '
+                    'at ${K.reminderHour} a.m.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -98,7 +124,7 @@ class NotificationRationaleDialog extends StatelessWidget {
         FilledButton(
           style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Allow reminders'),
+          child: Text(offerSettings ? 'Open settings' : 'Allow reminders'),
         ),
       ],
     );

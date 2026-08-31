@@ -8,7 +8,7 @@ class SettingsService {
   static final SettingsService instance = SettingsService._();
 
   static const String _themeModeKey = 'theme_mode';
-  static const String _notifPromptDismissedKey = 'notif_prompt_dismissed';
+  static const String _systemPromptSpentKey = 'notif_system_prompt_spent';
 
   Future<ThemeMode> readThemeMode() async {
     try {
@@ -30,22 +30,23 @@ class SettingsService {
     }
   }
 
-  /// True once the user has said "not now" to the reminder explainer. They can
-  /// still turn reminders on later from the drawer.
-  Future<bool> readNotificationPromptDismissed() async {
+  /// True once Android's own permission prompt has been used and refused, so
+  /// asking again would silently do nothing and the user must be sent to
+  /// system settings instead.
+  Future<bool> readSystemPromptSpent() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(_notifPromptDismissedKey) ?? false;
+      return prefs.getBool(_systemPromptSpentKey) ?? false;
     } catch (e) {
       debugPrint('Medstock: could not read notification prompt state — $e');
       return false;
     }
   }
 
-  Future<void> writeNotificationPromptDismissed(bool dismissed) async {
+  Future<void> writeSystemPromptSpent(bool spent) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_notifPromptDismissedKey, dismissed);
+      await prefs.setBool(_systemPromptSpentKey, spent);
     } catch (e) {
       debugPrint('Medstock: could not save notification prompt state — $e');
     }

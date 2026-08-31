@@ -153,6 +153,18 @@ class NotificationService {
     );
   }
 
+  /// Opens this app's notification settings, for when Android will no longer
+  /// show its own permission prompt.
+  Future<bool> openSettings() async {
+    await init();
+    try {
+      return await _plugin.openAppNotificationSettings() ?? false;
+    } catch (e) {
+      debugPrint('Medstock: could not open notification settings — $e');
+      return false;
+    }
+  }
+
   Future<List<PendingNotificationRequest>> pending() async {
     await init();
     return _plugin.pendingNotificationRequests();
