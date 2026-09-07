@@ -293,24 +293,26 @@ app already published under that key.
 
 ```
 flutter analyze   # clean
-flutter test      # 123 tests
+flutter test      # 128 tests
 ```
 
-- **Projection engine** — snapshot replay, coverage, order quantities,
-  weekday / interval / duration schedules, reminder dates, pluralisation.
-- **End-to-end through the real sqflite schema**, no mocks, via
-  `sqflite_common_ffi` — the shared-medicine case, search, orders, receiving,
-  history events, cost estimates, and a full backup round trip.
-- **Migrations** — a hand-built v1 database is upgraded and checked row by row.
-- **Widget tests** rendering the real screens, including a 360×640 phone surface
-  to catch layout overflow, and both themes.
-- **Integration tests** driving the real app on a device.
+| Suite | Tests | What it covers |
+|---|---|---|
+| `stock_math_test` | 39 | Snapshot replay, coverage, order quantities, weekday / interval / duration schedules, reminder dates, pack pricing, pluralisation |
+| `history_and_backup_test` | 23 | History events, cost estimates, and a full backup export→import round trip |
+| `widget_smoke_test` | 27 | The real screens rendered, including a 360×560 surface to catch overflow, both themes, and the pricing validation |
+| `app_flow_test` | 22 | End-to-end through the real sqflite schema, no mocks, via `sqflite_common_ffi` |
+| `migration_test` | 10 | A hand-built v1 database upgraded to current and checked row by row |
+| `theme_provider_test` | 7 | Theme preference and its persistence |
 
-A note on the last two: several genuine bugs in this codebase were found only by
-rendering and driving it, not by reading it — duplicate hero tags that asserted
-on every route transition, a `Material` that crashed on exactly the low-stock
-cards, and interactions that silently no-opped against off-screen widgets. The
-suite exists because of them.
+Plus 5 integration tests driving the real app on a device or emulator.
+
+A note on the last two kinds: several genuine bugs here were found only by
+rendering and driving the app, not by reading it — duplicate hero tags that
+asserted on every route transition, a `Material` that crashed on exactly the
+low-stock cards, interactions that silently no-opped against off-screen
+widgets, and a lazy `ListView` that unregistered a form field so its validator
+was skipped entirely. The suite exists because of them.
 
 ## Licence
 
